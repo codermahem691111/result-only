@@ -5,9 +5,23 @@ const cfg = require("./config");
 const routes = require("./routes");
 const { startConsumer, projector, audit } = require("./events");
 
+// CLIENT_URL may hold several comma-separated sites (spaces and trailing slashes are ignored).
+// A site may contain * to match one URL segment, e.g. https://myapp-*-myteam.vercel.app
+const originRules = (cfg.clientUrl || "https://resultsaasfrontend-2.vercel.app/")
+  .split(",")
+  .map((s) => s.trim().replace(/\/+$/, ""))
+  .filter(Boolean)
+  .map((s) =>
+    s.includes("*")
+      ? new RegExp("^" + s.split("*").map((p) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[a-z0-9-]+") + "$", "i")
+      : s
+  );
+const isAllowedOrigin = (o) => originRules.some((r) => (r instanceof RegExp ? r.test(o) : r === o));
+const corsOptions = { origin: (origin, cb) => cb(null, !origin || isAllowedOrigin(origin)) };
+
 const app = express();
 app.disable("x-powered-by");
-app.use(cors({ origin: cfg.clientUrl }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) =>
